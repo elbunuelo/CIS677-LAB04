@@ -4,6 +4,7 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_sort_double.h>
 #include <math.h>
+#include <sys/time.h>
 #include <time.h>
 #include <string.h>
 
@@ -134,6 +135,9 @@ int main() {
 
     Gene genes[GENE_NUMBER];
 
+    double elapsed_time;
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
     while ((read = getline(&line, &len, fp)) != -1) {
         int normal_n = 0;
         int diseased_n = 0;
@@ -200,10 +204,6 @@ int main() {
         line_index++;
     }
 
-    fclose(fp);
-    if (line) {
-        free(line);
-    }
 
     qsort(genes, GENE_NUMBER, sizeof(Gene), compare_genes);
     int i;
@@ -212,6 +212,13 @@ int main() {
         printf("%s, %.2f\n", gene.name, gene.d_value);
     }
 
+    gettimeofday(&end, NULL);
+    elapsed_time = (end.tv_sec - start.tv_sec) * 1000.0;
+    elapsed_time += (end.tv_usec - start.tv_usec) / 1000.0;
+    printf("Time (ms): %f\n", elapsed_time);
+
+    fclose(fp);
+    free(line);
     gsl_rng_free(r);
     return 0;
 }
