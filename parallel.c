@@ -17,12 +17,13 @@
 #define MASTER 0
 #define EOL "\n"
 #define SEPARATOR ","
+#define NAME_LENGTH 10
 
 
 gsl_rng *r;
 
 struct Gene {
-    char name[10];
+    char name[NAME_LENGTH];
     double d_value;
 };
 
@@ -132,12 +133,16 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
 
+    double starttime, endtime;
+    starttime = MPI_Wtime();
+
     int genes_per_process = ceil((float)GENE_NUMBER/num_nodes);
     int values_per_gene = (NORMAL_MAX + DISEASED_MAX);
     int total_values = values_per_gene * GENE_NUMBER;
     double *genes_values = malloc(total_values * sizeof(double));
+    char *names = malloc(NAME_LENGTH * GENE_NUMBER);
     if (my_rank == MASTER) {
-        char * buffer = 0;
+        char * buffer;
         long length;
         FILE *f = fopen(FILE_NAME, "rb");
         if (!f) {
@@ -168,6 +173,7 @@ int main(int argc, char* argv[]) {
         line = strsep(&buffer, EOL);
         while ((line = strsep(&buffer, EOL)) != NULL) {
             char *name = strsep(&line, SEPARATOR);
+            strncpy(names + NAME_LENGTH * line_index, name, strlen(name));
             while ((value = strsep(&line, SEPARATOR)) != NULL) {
                 genes_values[value_index] = strtod(value, NULL);
                 value_index++;
@@ -192,6 +198,8 @@ int main(int argc, char* argv[]) {
         MASTER, MPI_COMM_WORLD);
 
     int i, j;
+    int send_buffer_size = genes_per_process * values_per_gene * sizeof(double);
+    double *gather_send_buffer = malloc(send_buffer_size);
     for(i = 0; i < genes_per_process; i++) {
         double diseased_genes[DISEASED_MAX];
         int diseased_n = 0;
@@ -214,16 +222,51 @@ int main(int argc, char* argv[]) {
         double distribution[DISTRIBUTION_SIZE];
         double reference_t = t_stat(normal_genes, normal_n, diseased_genes, diseased_n);
 
-        for (i = 0; i< DISTRIBUTION_SIZE; i++) {
-            distribution[i] = random_permutation_t(normal_genes, normal_n, diseased_genes, diseased_n);
+        for (j = 0; j< DISTRIBUTION_SIZE; j++) {
+            distribution[j] = random_permutation_t(normal_genes, normal_n, diseased_genes, diseased_n);
         }
 
         double distribution_mean = gsl_stats_mean(distribution, 1, DISTRIBUTION_SIZE);
         double distribution_sd = gsl_stats_sd_m(distribution, 1, DISTRIBUTION_SIZE, distribution_mean);
         double d_value = fabs(reference_t - distribution_mean) / distribution_sd;
+        gather_send_buffer[i] = d_value;
+    }
+
+    double *gather_receive_buffer = NULL;
+    if (my_rank == MASTER) {
+        gather_receive_buffer = malloc(GENE_NUMBER * values_per_gene * sizeof(double));
     }
 
 
+    MPI_Gather(
+            gather_send_buffer, genes_per_process, MPI_DOUBLE,
+            gather_receive_buffer, genes_per_process, MPI_DOUBLE,
+            MASTER, MPI_COMM_WORLD);
+
+
+    if (my_rank == MASTER) {
+        endtime   = MPI_Wtime();
+        printf("%f\n", endtime-starttime);
+        Gene genes[GENE_NUMBER];
+        for (i = 0; i < GENE_NUMBER; i++) {
+            Gene gene;
+            gene.d_value = gather_receive_buffer[i];
+            strncpy(gene.name, names + i * NAME_LENGTH, NAME_LENGTH);
+            genes[i] = gene;
+        }
+
+        qsort(genes, GENE_NUMBER, sizeof(Gene), compare_genes);
+        int i;
+        for (i = 0; i < 10; i++) {
+            Gene gene = genes[i];
+            /*printf("%s, %.2f\n", gene.name, gene.d_value);*/
+        }
+
+        free(gather_receive_buffer);
+    }
+
+    free(names);
+    free(gather_send_buffer);
     free(genes_values);
     free(receive_buffer);
     MPI_Finalize();

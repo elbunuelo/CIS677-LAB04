@@ -204,18 +204,18 @@ int main() {
         line_index++;
     }
 
+    gettimeofday(&end, NULL);
+    elapsed_time = (end.tv_sec - start.tv_sec);
+    elapsed_time += (end.tv_usec - start.tv_usec) / (1000.0 * 1000.0);
 
     qsort(genes, GENE_NUMBER, sizeof(Gene), compare_genes);
-    int i;
-    for (i = 0; i < 10; i++) {
-        Gene gene = genes[i];
-        printf("%s, %.2f\n", gene.name, gene.d_value);
-    }
+    /*int i;*/
+    /*for (i = 0; i < 10; i++) {*/
+        /*Gene gene = genes[i];*/
+        /*printf("%s, %.2f\n", gene.name, gene.d_value);*/
+    /*}*/
 
-    gettimeofday(&end, NULL);
-    elapsed_time = (end.tv_sec - start.tv_sec) * 1000.0;
-    elapsed_time += (end.tv_usec - start.tv_usec) / 1000.0;
-    printf("Time (ms): %f\n", elapsed_time);
+    printf("%f\n", elapsed_time);
 
     fclose(fp);
     free(line);
